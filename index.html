@@ -4513,10 +4513,9 @@ function doCopy(btn){
         '</div>';
     }
 
-    var cl = document.getElementById('cl-' + d.commentId);
-    var cn = document.getElementById('cn-' + d.commentId);
+    var hasComments = !!d.commentId;
     var commentHtml = '';
-    if(cn){
+    if(hasComments){
       commentHtml =
         '<div class="art-comments art-reveal" id="art-comments-' + d.commentId + '">' +
           '<div class="art-comments-hd">Comments \u00b7 留言</div>' +
@@ -4558,7 +4557,7 @@ function doCopy(btn){
       });
     });
 
-    if(cl){
+    if(hasComments){
       var artClId = 'art-cl-' + d.commentId;
       // 文章内部：完整模式，加载该文章全部评论（不复用外面卡片的简略版）
       loadC(d.commentId, artClId, false);
@@ -4568,7 +4567,7 @@ function doCopy(btn){
     (function(){
       var row = document.getElementById('artCommentRow');
       if(!row) return;
-      if(cn){
+      if(hasComments){
         row.style.display = 'flex';
         row.dataset.commentId = d.commentId;
         var nameEl = document.getElementById('artCommentName');
