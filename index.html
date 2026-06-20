@@ -1170,6 +1170,11 @@ button, a, input, label, [onclick], video {
 .comment-row button {
   cursor: pointer !important;
 }
+/* 文章内唯一评论框隐藏（未 docked）时，强制禁用交互/可见性，避免被上面的通用规则覆盖 */
+.art-comment-row:not(.docked) input,
+.art-comment-row:not(.docked) button {
+  pointer-events: none !important;
+}
 
 /* ══════════════════════════════════════════
    ARTICLE OVERLAY  —  clean rebuild
@@ -1525,9 +1530,9 @@ button, a, input, label, [onclick], video {
 .art-send-btn{ transition:background .2s,border-color .2s,color .2s,transform .2s; cursor:pointer !important; pointer-events:all !important; }
 .art-send-btn.sent{ border-color:rgba(196,154,82,.6) !important; color:var(--gold) !important; transform:scale(1.06); }
 
-/* ── 评论输入框：常驻 fixed 贴底，平时隐藏不可交互；阅读到底部时平滑淡入显示 ── */
+/* ── 评论输入框：唯一一份，绝对定位贴合 articleOverlay 底部；平时隐藏，滚动到底部时淡入显示 ── */
 .art-comment-row{
-  position:fixed;
+  position:absolute;
   left:0; right:0; bottom:0;
   margin:0;
   padding:14px var(--pad);
@@ -1535,7 +1540,7 @@ button, a, input, label, [onclick], video {
   -webkit-backdrop-filter:blur(20px) saturate(1.4);
   backdrop-filter:blur(20px) saturate(1.4);
   border-top:1px solid var(--line2);
-  border-radius:0;
+  border-radius:0 0 var(--r) var(--r);
   box-shadow:0 -8px 24px rgba(0,0,0,.35);
   z-index:50;
   opacity:0;
@@ -1549,7 +1554,7 @@ button, a, input, label, [onclick], video {
   pointer-events:auto;
 }
 @media(max-width:768px){
-  .art-comment-row{ padding:12px 16px; }
+  .art-comment-row{ padding:12px 16px; border-radius:0; }
 }
 
 /* ── 列表页 Read Full 按钮 ── */
@@ -2271,6 +2276,13 @@ Digital Video, Accademia di Belle Arti di Roma.</p>
     <div id="artContent">
       <!-- filled dynamically by openArticle() -->
     </div>
+  </div>
+
+  <!-- 唯一的评论输入框：固定贴底，平时隐藏，滚动到评论区时淡入显示 -->
+  <div class="comment-row art-comment-row" id="artCommentRow" style="display:flex;gap:8px">
+    <input id="artCommentName" class="art-comment-input" placeholder="留下大名" style="width:100px;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:'Jost',sans-serif;font-size:.72rem;outline:none">
+    <input id="artCommentMsg" class="art-comment-input" placeholder="說點什麽..." style="flex:1;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:'Jost',sans-serif;font-size:.72rem;outline:none">
+    <button id="artCommentSend" class="art-send-btn" style="background:none;border:1px solid var(--gold-d);color:var(--gold);font-family:'Jost',sans-serif;font-size:.52rem;letter-spacing:.2em;padding:8px 16px;border-radius:7px;cursor:pointer">发送</button>
   </div>
 </div>
 
@@ -3347,16 +3359,27 @@ function containsBanned(text){
   var t=text.toLowerCase().replace(/\s/g,'');
   return BANNED_WORDS.some(function(w){return t.indexOf(w.toLowerCase())!==-1;});
 }
-function submitC(pid){
+function submitC(pid, fromArtRow){
   var now=Date.now();
   if(lastSubmit[pid]&&now-lastSubmit[pid]<15000){
     var sec=Math.ceil((15000-(now-lastSubmit[pid]))/1000);
     alert('15秒后才可以發下一條評論哦，還需等 '+sec+' 秒 😊');
     return;
   }
-  // 优先读 overlay 里的输入框（art-cn-/art-cm-），降级到列表里的（cn-/cm-）
-  var nameEl=document.getElementById('art-cn-'+pid)||document.getElementById('cn-'+pid);
-  var msgEl =document.getElementById('art-cm-'+pid)||document.getElementById('cm-'+pid);
+  var nameEl, msgEl, btn;
+  if(fromArtRow){
+    // 文章内部唯一输入框（固定 id，与文章无关）
+    nameEl = document.getElementById('artCommentName');
+    msgEl  = document.getElementById('artCommentMsg');
+    btn    = document.getElementById('artCommentSend');
+  } else {
+    // 外面卡片输入框（按 commentId 命名）
+    nameEl = document.getElementById('cn-'+pid);
+    msgEl  = document.getElementById('cm-'+pid);
+    document.querySelectorAll('button[onclick]').forEach(function(b){
+      if(b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("submitC('"+pid+"')")!==-1) btn=b;
+    });
+  }
   if(!nameEl||!msgEl)return;
   var name=nameEl.value.trim();
   var msg=msgEl.value.trim();
@@ -3370,12 +3393,7 @@ function submitC(pid){
     alert('評論包含不當內容，請修改後重新發送 🙏');
     return;
   }
-  // querySelector + 单引号转义在各浏览器行为不一致，改用 querySelectorAll 遍历匹配
-  // 参考：MDN CSS selectors spec / jsdom issue #2204 / gomakethings.com
-  var btn=null;
-  document.querySelectorAll('button[onclick]').forEach(function(b){
-    if(b.getAttribute('onclick').indexOf("submitC('"+pid+"')")!==-1)btn=b;
-  });
+  var originalBtnHtml = btn ? btn.innerHTML : null;
   if(btn){btn.textContent='...';btn.disabled=true;}
   fetch(SUPA_URL+'/rest/v1/comments',{
     method:'POST',
@@ -3392,7 +3410,7 @@ function submitC(pid){
         btn.innerHTML='<span class="send-check">✓</span>';
         setTimeout(function(){
           btn.classList.remove('sent');
-          btn.textContent='发送';
+          btn.innerHTML = originalBtnHtml || '发送';
         }, 1800);
       }
       // 发表成功后刷新评论：外面卡片用简略模式，文章内部用完整模式（两处若存在都刷新）
@@ -4503,11 +4521,6 @@ function doCopy(btn){
         '<div class="art-comments art-reveal" id="art-comments-' + d.commentId + '">' +
           '<div class="art-comments-hd">Comments \u00b7 留言</div>' +
           '<div id="art-cl-' + d.commentId + '" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>' +
-          '<div class="comment-row art-comment-row" id="art-comment-row-' + d.commentId + '" style="display:flex;gap:8px">' +
-            '<input id="art-cn-' + d.commentId + '" class="art-comment-input" placeholder="留下大名" style="width:100px;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
-            '<input id="art-cm-' + d.commentId + '" class="art-comment-input" placeholder="說點什麽..." style="flex:1;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
-            '<button onclick="submitC(\'' + d.commentId + '\')" class="art-send-btn" style="background:none;border:1px solid var(--gold-d);color:var(--gold);font-family:\'Jost\',sans-serif;font-size:.52rem;letter-spacing:.2em;padding:8px 16px;border-radius:7px;cursor:pointer">发送</button>' +
-          '</div>' +
         '</div>';
     }
 
@@ -4550,6 +4563,27 @@ function doCopy(btn){
       // 文章内部：完整模式，加载该文章全部评论（不复用外面卡片的简略版）
       loadC(d.commentId, artClId, false);
     }
+
+    // ── 唯一评论输入框：绑定到当前文章 ──
+    (function(){
+      var row = document.getElementById('artCommentRow');
+      if(!row) return;
+      if(cn){
+        row.style.display = 'flex';
+        row.dataset.commentId = d.commentId;
+        var nameEl = document.getElementById('artCommentName');
+        var msgEl  = document.getElementById('artCommentMsg');
+        var sendBtn= document.getElementById('artCommentSend');
+        if(nameEl) nameEl.value = '';
+        if(msgEl)  msgEl.value  = '';
+        if(sendBtn){
+          sendBtn.onclick = function(){ submitC(d.commentId, true); };
+        }
+      } else {
+        row.style.display = 'none';
+        row.classList.remove('docked');
+      }
+    })();
 
     // 绑定内联 copy 按钮
     var copyBtn = artContent.querySelector('.art-copy-btn');
@@ -4711,7 +4745,7 @@ function doCopy(btn){
     artProgress.style.width = Math.min(pct,100).toFixed(1) + '%';
     artTitleBar.classList.toggle('vis', artScroll.scrollTop > 80);
 
-    var commentRow = artContent.querySelector('.art-comment-row');
+    var commentRow = document.getElementById('artCommentRow');
     if(commentRow){
       var shouldDock = pct >= DOCK_THRESHOLD;
       commentRow.classList.toggle('docked', shouldDock);
