@@ -27,7 +27,7 @@ Created in 2026, age 19 — a space to share everyday thoughts and preserve the 
 | 📷 **Photo** | Photography |
 | 🤖 **AI** | Stable Diffusion · ComfyUI |
 | 🎵 **Sound** | REAPER · sound design |
-| ✏️ **GRAPHIC** | Photoshop . Processing works . Illustrator |
+| ✏️ **Graphic** | Photoshop . Processing works . Illustrator |
 | 🎬 **Video** | Digital video · After Effects |
 | 📜 **Statement** | Artist statement |
 
