@@ -2946,8 +2946,8 @@ function _lbShow(idx){
     var lbWrap   = document.querySelector('.lb-wrap');
     var lbSideEl = document.getElementById('lbSide');
 
-    // 3D:100-128 | Photo:200-208 | AI:300-309 → 横图大图模式
-    var isWide = (idx>=100&&idx<=128)||(idx>=200&&idx<=208)||(idx>=300&&idx<=309);
+    // 3D:100-129 | Photo:200-208 | AI:300-309 → 横图大图模式
+    var isWide = (idx>=100&&idx<=129)||(idx>=200&&idx<=208)||(idx>=300&&idx<=309);
 
     if(isWide){
       lbImgEl.style.width        = 'auto';
