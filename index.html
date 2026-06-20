@@ -1518,12 +1518,35 @@ button, a, input, label, [onclick], video {
 .art-next:hover .art-next-arr{ transform:translateX(4px); }
 
 /* 评论区 */
-.art-comments{ margin-top:36px; }
+.art-comments{ margin-top:36px; position:relative; }
 .art-comments-hd{ font-family:'Jost',sans-serif; font-size:.52rem; font-weight:400; letter-spacing:.3em; text-transform:uppercase; color:var(--fg-dd); margin-bottom:14px; }
 .art-comment-input{ transition:border-color .2s,box-shadow .2s; }
 .art-comment-input:focus{ border-color:rgba(196,154,82,.55) !important; box-shadow:0 0 0 3px rgba(196,154,82,.08) !important; outline:none !important; }
 .art-send-btn{ transition:background .2s,border-color .2s,color .2s,transform .2s; cursor:pointer !important; pointer-events:all !important; }
 .art-send-btn.sent{ border-color:rgba(196,154,82,.6) !important; color:var(--gold) !important; transform:scale(1.06); }
+
+/* ── 评论输入框：阅读到底部时贴底悬浮，盖住下方评论 ── */
+.art-comment-row{
+  transition:none;
+}
+.art-comment-row.docked{
+  position:absolute;
+  left:0; right:0; bottom:0;
+  margin:0;
+  padding:14px var(--pad);
+  background:rgba(22,21,19,0.96);
+  -webkit-backdrop-filter:blur(20px) saturate(1.4);
+  backdrop-filter:blur(20px) saturate(1.4);
+  border-top:1px solid var(--line2);
+  border-radius:0;
+  box-shadow:0 -8px 24px rgba(0,0,0,.35);
+  z-index:50;
+}
+@media(max-width:768px){
+  .art-comment-row.docked{ padding:12px 16px; }
+}
+/* docked 时给评论列表留出底部安全间距，避免被输入框完全遮住最后一条 */
+.art-comments.has-docked-spacer{ padding-bottom:64px; }
 
 /* ── 列表页 Read Full 按钮 ── */
 .blog-open-btn{
@@ -3255,17 +3278,30 @@ function _likeSession(){
   return v;
 }
 
-function loadC(pid){
+// listElId: 渲染目标容器 id。compact: true=外面卡片简略模式（最多2条+查看全部），false=完整模式（全部）
+// onViewAll: compact 模式下，超过2条时"查看全部"按钮的点击回调
+function loadC(pid, listElId, compact, onViewAll){
+  if(!listElId) listElId = 'cl-' + pid;
   fetch(SUPA_URL+'/rest/v1/comments?post_id=eq.'+pid+'&order=created_at.asc',{
     headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
   }).then(function(r){
     if(!r.ok)throw new Error('HTTP '+r.status);
     return r.json();
   }).then(function(data){
-    var list=document.getElementById('cl-'+pid);
+    var list=document.getElementById(listElId);
     if(!list)return;
     list.innerHTML='';
-    data.forEach(function(c){
+
+    var total = data.length;
+    var renderData = data;
+    var truncated = false;
+
+    if(compact && total > 2){
+      renderData = data.slice(total - 2); // 数据按时间正序，取末尾2条即最新2条
+      truncated = true;
+    }
+
+    renderData.forEach(function(c){
       var el=document.createElement('div');
       el.style.cssText='padding:8px 0;border-bottom:1px solid var(--line)';
       var nameSpan=document.createElement('span');
@@ -3278,6 +3314,19 @@ function loadC(pid){
       el.appendChild(msgSpan);
       list.appendChild(el);
     });
+
+    if(truncated){
+      var more=document.createElement('div');
+      more.className = 'comment-view-all';
+      more.style.cssText='padding:10px 0 2px;cursor:pointer;font-family:\'Jost\',sans-serif;font-size:.6rem;letter-spacing:.08em;color:var(--gold-d);transition:color .2s';
+      more.textContent='点击查看全部评论 →';
+      more.addEventListener('mouseenter', function(){ more.style.color='var(--gold)'; });
+      more.addEventListener('mouseleave', function(){ more.style.color='var(--gold-d)'; });
+      if(typeof onViewAll === 'function'){
+        more.addEventListener('click', onViewAll);
+      }
+      list.appendChild(more);
+    }
   });
 }
 
@@ -3342,7 +3391,15 @@ function submitC(pid){
           btn.textContent='发送';
         }, 1800);
       }
-      loadC(pid);
+      // 发表成功后刷新评论：外面卡片用简略模式，文章内部用完整模式（两处若存在都刷新）
+      if(document.getElementById('cl-' + pid)){
+        loadC(pid, 'cl-' + pid, true, function(){
+          if(window.openArticleByCommentId) window.openArticleByCommentId(pid);
+        });
+      }
+      if(document.getElementById('art-cl-' + pid)){
+        loadC(pid, 'art-cl-' + pid, false);
+      }
     } else {
       r.text().then(function(t){alert('發送失敗: '+r.status+' '+t);});
     }
@@ -3352,7 +3409,10 @@ function submitC(pid){
 
 document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('[id^="cl-"]').forEach(function(el){
-    loadC(el.id.replace('cl-',''));
+    var pid = el.id.replace('cl-','');
+    loadC(pid, el.id, true, function(){
+      if(window.openArticleByCommentId) window.openArticleByCommentId(pid);
+    });
   });
 });
 const io = new IntersectionObserver((entries) => {
@@ -4232,6 +4292,12 @@ function doCopy(btn){
     })
     .catch(function(e){ console.error('articles.json 加载失败', e); });
 
+  // 供"查看全部评论"按钮使用：根据 commentId 反查文章 id 并打开
+  window.openArticleByCommentId = function(commentId){
+    var target = LIST.find(function(a){ return a.commentId === commentId; });
+    if(target) openArticle(target.id);
+  };
+
   // ── 渲染博客列表 ──
   function renderList(list){
     var wrap = document.getElementById('blog-list-container');
@@ -4374,10 +4440,13 @@ function doCopy(btn){
       }
     })();
 
-    // 加载评论
+    // 加载评论（外面卡片：简略模式，最多2条+查看全部）
     setTimeout(function(){
       wrap.querySelectorAll('[id^="cl-"]').forEach(function(el){
-        loadC(el.id.replace('cl-',''));
+        var pid = el.id.replace('cl-','');
+        loadC(pid, el.id, true, function(){
+          if(window.openArticleByCommentId) window.openArticleByCommentId(pid);
+        });
       });
     }, 100);
   }
@@ -4427,10 +4496,10 @@ function doCopy(btn){
     var commentHtml = '';
     if(cn){
       commentHtml =
-        '<div class="art-comments art-reveal">' +
+        '<div class="art-comments art-reveal" id="art-comments-' + d.commentId + '">' +
           '<div class="art-comments-hd">Comments \u00b7 留言</div>' +
           '<div id="art-cl-' + d.commentId + '" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>' +
-          '<div class="comment-row" style="display:flex;gap:8px">' +
+          '<div class="comment-row art-comment-row" id="art-comment-row-' + d.commentId + '" style="display:flex;gap:8px">' +
             '<input id="art-cn-' + d.commentId + '" class="art-comment-input" placeholder="留下大名" style="width:100px;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
             '<input id="art-cm-' + d.commentId + '" class="art-comment-input" placeholder="說點什麽..." style="flex:1;background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:8px 12px;color:var(--fg);font-family:\'Jost\',sans-serif;font-size:.72rem;outline:none">' +
             '<button onclick="submitC(\'' + d.commentId + '\')" class="art-send-btn" style="background:none;border:1px solid var(--gold-d);color:var(--gold);font-family:\'Jost\',sans-serif;font-size:.52rem;letter-spacing:.2em;padding:8px 16px;border-radius:7px;cursor:pointer">发送</button>' +
@@ -4473,8 +4542,9 @@ function doCopy(btn){
     });
 
     if(cl){
-      var artCl = document.getElementById('art-cl-' + d.commentId);
-      if(artCl) artCl.innerHTML = cl.innerHTML;
+      var artClId = 'art-cl-' + d.commentId;
+      // 文章内部：完整模式，加载该文章全部评论（不复用外面卡片的简略版）
+      loadC(d.commentId, artClId, false);
     }
 
     // 绑定内联 copy 按钮
@@ -4629,13 +4699,27 @@ function doCopy(btn){
     document.dispatchEvent(new CustomEvent('articleClose'));
   };
 
-  // ── 阅读进度 ──
+  // ── 阅读进度 + 评论输入框贴底 ──
+  var DOCK_THRESHOLD = 99; // 滚动进度达到此百分比视为"读完"，触发输入框贴底
   artScroll.addEventListener('scroll', function(){
     var max = artScroll.scrollHeight - artScroll.clientHeight;
     var pct = max > 0 ? (artScroll.scrollTop / max * 100) : 0;
     artProgress.style.width = Math.min(pct,100).toFixed(1) + '%';
     artTitleBar.classList.toggle('vis', artScroll.scrollTop > 80);
+
+    var commentRow = artContent.querySelector('.art-comment-row');
+    if(commentRow){
+      var commentsWrap = commentRow.closest('.art-comments');
+      var shouldDock = pct >= DOCK_THRESHOLD;
+      commentRow.classList.toggle('docked', shouldDock);
+      if(commentsWrap) commentsWrap.classList.toggle('has-docked-spacer', shouldDock);
+    }
   }, {passive:true});
+
+  // 切换/关闭文章时重置贴底状态（避免下一篇文章残留 docked 样式）
+  document.addEventListener('articleClose', function(){
+    document.querySelectorAll('.art-comment-row.docked').forEach(function(el){ el.classList.remove('docked'); });
+  });
 
   // ── 分享按钮 ──
   (function(){
