@@ -4743,7 +4743,10 @@ function doCopy(btn){
   };
 
   // ── 阅读进度 + 评论输入框贴底 ──
-  var DOCK_THRESHOLD = 99; // 滚动进度达到此百分比视为"读完"，触发输入框贴底
+  // 用滞后区间(hysteresis)代替单一阈值，避免在临界点附近小幅滚动时
+  // docked 状态反复加上/摘掉，造成留言框忽隐忽现的闪烁 bug。
+  var DOCK_SHOW_THRESHOLD = 99; // 滚动进度达到此百分比才"出现"
+  var DOCK_HIDE_THRESHOLD = 90; // 要回退到此百分比以下才"消失"
   artScroll.addEventListener('scroll', function(){
     var max = artScroll.scrollHeight - artScroll.clientHeight;
     var pct = max > 0 ? (artScroll.scrollTop / max * 100) : 0;
@@ -4752,8 +4755,12 @@ function doCopy(btn){
 
     var commentRow = document.getElementById('artCommentRow');
     if(commentRow){
-      var shouldDock = pct >= DOCK_THRESHOLD;
-      commentRow.classList.toggle('docked', shouldDock);
+      var isDocked = commentRow.classList.contains('docked');
+      if(!isDocked && pct >= DOCK_SHOW_THRESHOLD){
+        commentRow.classList.add('docked');
+      } else if(isDocked && pct < DOCK_HIDE_THRESHOLD){
+        commentRow.classList.remove('docked');
+      }
     }
   }, {passive:true});
 
