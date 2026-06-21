@@ -4797,14 +4797,20 @@ function doCopy(btn){
     }
   }, {passive:true});
 
-  // 内容太短、没有滚动空间（无法触发 scroll 事件）时，自动弹起评论输入框
+  // 内容太短、没有滚动空间（无法触发 scroll 事件）时，自动弹起评论输入框；
+  // 反之内容变长、重新有了滚动空间时（例如发表评论后列表变长），也要主动取消贴底，
+  // 否则 dock 之后永远没有对应的 undock 时机，会导致输入框一直卡在显示状态、持续占位。
   function checkAutoExpandComment(){
     var commentRow = document.getElementById('artCommentRow');
     if(!commentRow || commentRow.dataset.hasComments !== '1') return;
     var max = artScroll.scrollHeight - artScroll.clientHeight;
+    var isDocked = commentRow.classList.contains('docked');
     if(max <= 4){ // 几乎没有可滚动空间（留 4px 容差）
       artProgress.style.width = '100%';
-      dockCommentRow(commentRow);
+      if(!isDocked) dockCommentRow(commentRow);
+    } else if(isDocked && artScroll.scrollTop / max * 100 < DOCK_HIDE_THRESHOLD){
+      // 已经有滚动空间了，且当前滚动位置不在底部附近，说明是因为内容变长而不再需要强制贴底
+      undockCommentRow(commentRow);
     }
   }
   // 文章打开动画结束后检查一次（此时大部分内容已渲染）
