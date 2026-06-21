@@ -1555,8 +1555,14 @@ button, a, input, label, [onclick], video {
 .art-comment-row.docked{
   opacity:1;
   transform:translateY(0);
+}
+/* CSS 级硬保险：留言框真正"可点击"必须同时满足 #articleOverlay 处于 art-on（文章打开中）。
+   不管 JS 那边的 dock/undock 逻辑将来有没有新 bug、有没有漏掉某个触发点，
+   只要文章已经关闭，这条规则本身就保证它绝不会再挡住下面元素的点击。 */
+#articleOverlay.art-on .art-comment-row.docked{
   pointer-events:auto;
 }
+
 @media(max-width:768px){
   .art-comment-row{ padding:12px 16px; border-radius:0; }
 }
@@ -4783,6 +4789,11 @@ function doCopy(btn){
   var DOCK_ANIM_MS = 320; // 必须与 CSS .art-comment-row 的 transition 时长一致
 
   function dockCommentRow(commentRow){
+    // 全局唯一的"添加 docked"入口 —— 把守卫放在这里而不是分散在各个
+    // 调用点（scroll/checkAutoExpandComment/resize），保证不管将来
+    // 从哪里调用 dockCommentRow，文章一旦关闭就绝不可能再被重新显示
+    // 出来（彻底杜绝"关闭后留言框隐形占位、挡住下面元素点击"）。
+    if(!overlay.classList.contains('art-on')) return;
     if(commentRow._hideTimer){ clearTimeout(commentRow._hideTimer); commentRow._hideTimer = null; }
     if(commentRow.style.display === 'none' || !commentRow.style.display){
       commentRow.style.display = 'flex';
@@ -4809,12 +4820,6 @@ function doCopy(btn){
     artProgress.style.width = Math.min(pct,100).toFixed(1) + '%';
     artTitleBar.classList.toggle('vis', artScroll.scrollTop > 80);
 
-    // 文章已关闭时直接跳过 —— 移动端惯性滚动（inertia scroll）会在
-    // closeArticle() 之后还继续触发若干个 scroll 事件，若不加这道守卫，
-    // 这里仍会把已经隐藏的留言框重新 dock 出来，造成关闭后留言框
-    // 隐形挂在页面上、且因 pointer-events:auto 挡住下面元素的点击。
-    if(!overlay.classList.contains('art-on')) return;
-
     var commentRow = document.getElementById('artCommentRow');
     if(commentRow && commentRow.dataset.hasComments === '1'){
       var isDocked = commentRow.classList.contains('docked');
@@ -4830,12 +4835,8 @@ function doCopy(btn){
   // 反之内容变长、重新有了滚动空间时（例如发表评论后列表变长），也要主动取消贴底，
   // 否则 dock 之后永远没有对应的 undock 时机，会导致输入框一直卡在显示状态、持续占位。
   function checkAutoExpandComment(){
-    // 文章已关闭（overlay 不再处于 art-on 状态）时直接退出 ——
-    // 否则 closeArticle() 里 400ms 后清空 artContent.innerHTML 会触发
-    // ResizeObserver（高度变 0），导致这里把"刚关闭、已被隐藏"的留言框
-    // 又重新 dock 出来（display:flex + docked class），造成文章关闭后
-    // 留言输入框一直隐形占位、且因 .docked 的 pointer-events:auto 挡住点击。
-    if(!overlay.classList.contains('art-on')) return;
+    // 注：是否真正显示留言框，由 dockCommentRow() 内部统一把关
+    // （文章关闭后绝不会被重新 dock 出来），这里只负责判断"要不要尝试 dock"。
     var commentRow = document.getElementById('artCommentRow');
     if(!commentRow || commentRow.dataset.hasComments !== '1') return;
     var max = artScroll.scrollHeight - artScroll.clientHeight;
