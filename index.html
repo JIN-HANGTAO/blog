@@ -438,7 +438,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:8000;o
   background-clip:text;
   -webkit-text-fill-color:transparent;
   color:rgba(0,0,0,0.01);
-  will-change:background-position;
   transition:background-position .58s cubic-bezier(.22,.68,0,1.2),
              transform .28s cubic-bezier(.4,0,.2,1),
              letter-spacing .28s cubic-bezier(.4,0,.2,1),
@@ -2571,14 +2570,6 @@ function show(id,el){
     newTab.style.transition = '';
     newTab.style.backgroundPosition = '';
   }
-  // old tab leaving: explicitly lock end position to avoid lost gradient paint on fast switches
-  if(oldTab && oldTab !== newTab){
-    oldTab.style.transition = 'none';
-    oldTab.style.backgroundPosition = '100% 0';
-    void oldTab.offsetWidth;
-    oldTab.style.transition = '';
-    oldTab.style.backgroundPosition = '';
-  }
 
   moveIndicator(el);
 
@@ -3661,14 +3652,6 @@ function triggerStmtPoem(){
       void newTab.offsetWidth;
       newTab.style.transition = '';
       newTab.style.backgroundPosition = '';
-    }
-    // 旧 tab 离场：显式锁定终点位置，避免快速连续滑动时渐变贴图丢失渲染（闪白）
-    if(oldTab && oldTab !== newTab){
-      oldTab.style.transition = 'none';
-      oldTab.style.backgroundPosition = '100% 0';
-      void oldTab.offsetWidth;
-      oldTab.style.transition = '';
-      oldTab.style.backgroundPosition = '';
     }
 
     // 移動指示條 + 自動讓 topbar 滾到當前 tab 可見
